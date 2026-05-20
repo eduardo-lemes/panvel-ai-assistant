@@ -10,6 +10,9 @@ class Settings:
     environment: str
     debug: bool
     log_level: str
+    llm_provider: str
+    llm_model: str
+    openai_api_key: str | None
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -26,4 +29,7 @@ def get_settings() -> Settings:
         environment=os.getenv("APP_ENV", "local"),
         debug=_as_bool(os.getenv("APP_DEBUG"), default=False),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
+        llm_provider=os.getenv("LLM_PROVIDER", "mock"),
+        llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
     )

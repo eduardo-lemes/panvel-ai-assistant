@@ -23,3 +23,5 @@ def test_chat_stream_emits_trace_token_and_done_events() -> None:
     assert "event: done" in body
     assert '"trace_id":' in body
     assert '"conversation_id": "conv-123"' in body
+    assert '"provider": "mock"' in body
+    assert '"model": "gpt-4o-mini"' in body

@@ -51,3 +51,16 @@ POST http://localhost:8000/chat/stream
 ## Variaveis de ambiente
 
 As variaveis iniciais ficam em `.env.example`.
+
+## LLM provider
+
+O backend suporta provider substituivel por variavel de ambiente.
+
+- `LLM_PROVIDER=mock` para desenvolvimento local sem chave
+- `LLM_PROVIDER=openai` para usar a API da OpenAI
+
+Variaveis principais:
+
+- `LLM_PROVIDER`
+- `LLM_MODEL`
+- `OPENAI_API_KEY`
