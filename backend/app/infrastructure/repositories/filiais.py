@@ -7,7 +7,7 @@ from app.domain.models.filial import Filial
 
 
 YES_VALUES = {"sim", "s", "yes", "true", "1"}
-NO_VALUES = {"nao", "não", "n", "no", "false", "0"}
+NO_VALUES = {"nao", "n", "no", "false", "0"}
 
 
 class FilialRepository:
@@ -41,6 +41,51 @@ class FilialRepository:
             return None
         return _row_to_filial(matches.iloc[0].to_dict())
 
+    def search(
+        self,
+        *,
+        cidade: str | None = None,
+        delivery: bool | None = None,
+        panvel_clinic: bool | None = None,
+        estacionamento: bool | None = None,
+        atendimento_24_horas: bool | None = None,
+        tipo_estabelecimento: str | None = None,
+        limite: int = 10,
+    ) -> list[Filial]:
+        dataframe = self._load_dataframe().copy()
+
+        if cidade:
+            cidade_normalized = cidade.strip().casefold()
+            dataframe = dataframe.loc[
+                dataframe["localidade"]
+                .astype(str)
+                .map(str.strip)
+                .map(str.casefold)
+                == cidade_normalized
+            ]
+
+        if tipo_estabelecimento:
+            tipo_normalized = tipo_estabelecimento.strip().casefold()
+            dataframe = dataframe.loc[
+                dataframe["tipo_estabelecimento"]
+                .astype(str)
+                .map(str.strip)
+                .map(str.casefold)
+                == tipo_normalized
+            ]
+
+        dataframe = _filter_yes_no_column(dataframe, "delivery", delivery)
+        dataframe = _filter_yes_no_column(dataframe, "panvel_clinic", panvel_clinic)
+        dataframe = _filter_yes_no_column(dataframe, "estacionamento", estacionamento)
+        dataframe = _filter_yes_no_column(
+            dataframe,
+            "atendimento_24_horas",
+            atendimento_24_horas,
+        )
+
+        records = dataframe.head(limite).to_dict(orient="records")
+        return [_row_to_filial(record) for record in records]
+
 
 def build_default_filial_repository() -> FilialRepository:
     data_path = Path(__file__).resolve().parents[4] / "data" / "filiais.parquet"
@@ -52,11 +97,24 @@ def normalize_yes_no(value: object) -> bool | None:
         return None
 
     normalized_value = str(value).strip().lower()
+    normalized_value = normalized_value.replace("ã", "a").replace("õ", "o")
     if normalized_value in YES_VALUES:
         return True
     if normalized_value in NO_VALUES:
         return False
     return None
+
+
+def _filter_yes_no_column(
+    dataframe: pd.DataFrame,
+    column_name: str,
+    expected_value: bool | None,
+) -> pd.DataFrame:
+    if expected_value is None:
+        return dataframe
+
+    normalized_column = dataframe[column_name].map(normalize_yes_no)
+    return dataframe.loc[normalized_column == expected_value]
 
 
 def _optional_str(value: object) -> str | None:
