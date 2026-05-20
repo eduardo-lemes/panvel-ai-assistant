@@ -8,7 +8,24 @@ from app.infrastructure.config.settings import get_settings
 from app.infrastructure.llm.factory import build_llm_provider
 
 
-def test_chat_stream_emits_trace_token_and_done_events() -> None:
+def test_chat_stream_emits_trace_token_and_done_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pathlib import Path
+    from app.infrastructure.config.settings import Settings
+
+    mock_settings = Settings(
+        app_name="Panvel AI Assistant API",
+        app_version="0.1.0",
+        environment="test",
+        debug=False,
+        log_level="INFO",
+        llm_provider="mock",
+        llm_model="gpt-4o-mini",
+        openai_api_key=None,
+        embedding_provider="mock",
+        vector_store_path=Path("/tmp/test_vector_store"),
+    )
+    monkeypatch.setattr("app.application.services.chat.get_settings", lambda: mock_settings)
+
     client = TestClient(app)
 
     with client.stream(

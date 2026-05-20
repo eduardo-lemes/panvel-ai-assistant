@@ -30,6 +30,8 @@ coverage/
 *.db
 *.sqlite
 *.sqlite3
+.chroma/
+.vector_store/
 
 # Logs
 logs/
