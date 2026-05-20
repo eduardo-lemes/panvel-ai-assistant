@@ -11,6 +11,11 @@ O projeto esta sendo construido para atender dois tipos de pergunta:
 
 Nesta etapa, apenas o backend base em FastAPI foi iniciado.
 
+Endpoints atuais:
+
+- `GET /health`
+- `POST /chat/stream`
+
 ## Estrutura
 
 ```text
@@ -35,6 +40,12 @@ Health check:
 
 ```text
 GET http://localhost:8000/health
+```
+
+Streaming SSE:
+
+```text
+POST http://localhost:8000/chat/stream
 ```
 
 ## Variaveis de ambiente
