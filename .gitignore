@@ -1,0 +1,50 @@
+# Environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python / FastAPI
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node / React / Vite
+node_modules/
+.vite/
+coverage/
+
+# Local databases and generated artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+log/
+*.log
+
+# IDE / editor
+.vscode/
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Docker local overrides
+docker-compose.override.yml
