@@ -13,6 +13,7 @@ class ChatEventType(str, Enum):
     TOKEN = "token"
     SOURCE = "source"
     TOOL_CALL = "tool_call"
+    ERROR = "error"
     DONE = "done"
 
 

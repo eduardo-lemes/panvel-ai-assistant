@@ -1,6 +1,11 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
+from app.application.interfaces.llm import LLMProvider
+from app.domain.models.llm import LLMCompletionResult
+from app.infrastructure.config.settings import get_settings
+from app.infrastructure.llm.factory import build_llm_provider
 
 
 def test_chat_stream_emits_trace_token_and_done_events() -> None:
@@ -25,3 +30,33 @@ def test_chat_stream_emits_trace_token_and_done_events() -> None:
     assert '"conversation_id": "conv-123"' in body
     assert '"provider": "mock"' in body
     assert '"model": "gpt-4o-mini"' in body
+
+
+def test_chat_stream_emits_error_event_when_provider_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingProvider(LLMProvider):
+        def complete(self, message: str, system_prompt: str) -> LLMCompletionResult:
+            del message, system_prompt
+            raise RuntimeError("forced provider failure")
+
+    monkeypatch.setattr(
+        "app.application.services.chat.build_llm_provider",
+        lambda settings: FailingProvider(),
+    )
+
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={
+            "conversation_id": "conv-err",
+            "message": "Teste de erro",
+        },
+    ) as response:
+        body = b"".join(response.iter_bytes()).decode()
+
+    assert response.status_code == 200
+    assert "event: trace" in body
+    assert "event: error" in body
+    assert "event: done" in body
+    assert '"error_code": "RuntimeError"' in body

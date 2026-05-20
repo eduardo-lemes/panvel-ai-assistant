@@ -50,7 +50,7 @@ POST http://localhost:8000/chat/stream
 
 ## Variaveis de ambiente
 
-As variaveis iniciais ficam em `.env.example`.
+Crie um arquivo `.env` na raiz do projeto para configuracao local.
 
 ## LLM provider
 
@@ -64,3 +64,11 @@ Variaveis principais:
 - `LLM_PROVIDER`
 - `LLM_MODEL`
 - `OPENAI_API_KEY`
+
+Exemplo minimo:
+
+```env
+LLM_PROVIDER=mock
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=XxxX
+```
