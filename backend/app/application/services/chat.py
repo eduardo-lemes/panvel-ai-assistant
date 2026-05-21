@@ -326,7 +326,8 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
         return
 
     # Yield tokens and accumulate them for the trace response
-    for token in completion.text.split():
+    tokens = [t for t in re.split(r"(\s+)", completion.text) if t]
+    for token in tokens:
         tokens_accumulated.append(token)
         token_event = ChatEvent(
             event=ChatEventType.TOKEN,
@@ -339,7 +340,7 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
         yield _format_sse_event(token_event)
 
     # Reconstruct answer and search for sources cited
-    answer_text = " ".join(tokens_accumulated)
+    answer_text = "".join(tokens_accumulated)
     trace.answer = answer_text
     
     for doc in trace.documents_retrieved:

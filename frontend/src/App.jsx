@@ -222,7 +222,7 @@ function App() {
           target.toolCalls = [...(target.toolCalls || []), data];
           break;
         case 'token':
-          target.text += (target.text ? ' ' : '') + data.token;
+          target.text += data.token;
           break;
         case 'done':
           target.doneData = data;
