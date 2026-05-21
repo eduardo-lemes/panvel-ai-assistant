@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { 
   MessageSquare, 
   Send, 
@@ -373,8 +374,8 @@ function App() {
 
                     {/* 2. Text response body */}
                     {msg.text ? (
-                      <div style={{ whiteSpace: 'pre-wrap' }}>
-                        {msg.text}
+                      <div className="markdown-body">
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
                       </div>
                     ) : (
                       !msg.error && (
