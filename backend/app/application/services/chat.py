@@ -16,6 +16,9 @@ from app.infrastructure.repositories.filiais import build_default_filial_reposit
 from app.application.services.filial_tools import buscar_filiais, detalhes_filial
 from app.domain.models.tools import BuscarFiliaisInput, DetalhesFilialInput
 
+# Observability Imports
+from app.observability.traces import Trace, trace_repository
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,21 +74,37 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
     yield _format_sse_event(trace_event)
 
     started_at = time.perf_counter()
+    
+    # Initialize observability trace object
+    trace = Trace(
+        trace_id=trace_id,
+        conversation_id=payload.conversation_id,
+        prompt=payload.message,
+        provider=settings.llm_provider,
+        model=settings.llm_model,
+    )
+    
+    tokens_accumulated = []
+
     try:
         # 1. Routing
+        routing_start = time.perf_counter()
         intent = _classify_intent(payload.message)
+        trace.latencies["routing"] = round((time.perf_counter() - routing_start) * 1000, 2)
+        
         yield _format_sse_event(ChatEvent(
             event=ChatEventType.TRACE,
             data={
                 "trace_id": trace_id,
                 "conversation_id": payload.conversation_id,
                 "step": "routing",
-                "message": f"Intenção detectada: {intent}",
+                "message": f"Intencao detectada: {intent}",
             }
         ))
 
         # 2. Flow execution
         if intent == "rag":
+            retrieval_start = time.perf_counter()
             yield _format_sse_event(ChatEvent(
                 event=ChatEventType.TRACE,
                 data={
@@ -98,18 +117,27 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             
             retriever = get_retriever()
             chunks = retriever.retrieve(payload.message, k=3)
+            trace.latencies["retrieval"] = round((time.perf_counter() - retrieval_start) * 1000, 2)
             
-            # Emit source events
+            if not chunks:
+                trace.fallback = True
+            
+            # Emit source events and save metadata to trace
             for chunk in chunks:
+                doc_meta = {
+                    "arquivo": chunk.arquivo,
+                    "pagina": chunk.pagina,
+                    "secao": chunk.secao,
+                    "score": chunk.score,
+                }
+                trace.documents_retrieved.append(doc_meta)
+                
                 yield _format_sse_event(ChatEvent(
                     event=ChatEventType.SOURCE,
                     data={
                         "trace_id": trace_id,
                         "conversation_id": payload.conversation_id,
-                        "arquivo": chunk.arquivo,
-                        "pagina": chunk.pagina,
-                        "secao": chunk.secao,
-                        "score": chunk.score,
+                        **doc_meta,
                         "texto": chunk.texto,
                     }
                 ))
@@ -123,9 +151,13 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             
             rag_rules = load_prompt("rag-answering.md")
             full_system_prompt = f"{system_prompt}\n\n{rag_rules}\n\n=== CONTEXTO DAS BULAS ===\n{context_text}"
+            
+            llm_start = time.perf_counter()
             completion = provider.complete(payload.message, full_system_prompt)
+            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         elif intent == "detalhes_filial":
+            tool_start = time.perf_counter()
             match = re.search(r"\b\d+\b", payload.message)
             codigo_filial = match.group(0) if match else ""
             
@@ -142,6 +174,17 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             repo = build_default_filial_repository()
             tool_input = DetalhesFilialInput(codigo_filial=codigo_filial)
             tool_result = detalhes_filial(tool_input, repo)
+            trace.latencies["tool_call"] = round((time.perf_counter() - tool_start) * 1000, 2)
+            
+            # Record tool call in trace
+            trace.tool_calls.append({
+                "tool_name": "detalhes_filial",
+                "arguments": tool_input.model_dump(),
+                "result": tool_result.model_dump(),
+            })
+            
+            if tool_result.error or not tool_result.filial:
+                trace.fallback = True
             
             yield _format_sse_event(ChatEvent(
                 event=ChatEventType.TOOL_CALL,
@@ -156,9 +199,13 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             
             tool_rules = load_prompt("tool-calling.md")
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL detalhes_filial ===\n{tool_result.model_dump_json(indent=2)}"
+            
+            llm_start = time.perf_counter()
             completion = provider.complete(payload.message, full_system_prompt)
+            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         elif intent == "buscar_filiais":
+            tool_start = time.perf_counter()
             cidade = None
             for city in ["Curitiba", "Londrina", "Maringa", "Maringá", "Porto Alegre", "Cascavel", "Ponta Grossa", "Foz do Iguaçu", "Foz do Iguacu"]:
                 if city.lower() in payload.message.lower():
@@ -190,6 +237,17 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             
             repo = build_default_filial_repository()
             tool_result = buscar_filiais(tool_input, repo)
+            trace.latencies["tool_call"] = round((time.perf_counter() - tool_start) * 1000, 2)
+            
+            # Record tool call in trace
+            trace.tool_calls.append({
+                "tool_name": "buscar_filiais",
+                "arguments": tool_input.model_dump(),
+                "result": tool_result.model_dump(),
+            })
+            
+            if tool_result.error or not tool_result.filiais:
+                trace.fallback = True
             
             yield _format_sse_event(ChatEvent(
                 event=ChatEventType.TOOL_CALL,
@@ -204,16 +262,33 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             
             tool_rules = load_prompt("tool-calling.md")
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL buscar_filiais ===\n{tool_result.model_dump_json(indent=2)}"
+            
+            llm_start = time.perf_counter()
             completion = provider.complete(payload.message, full_system_prompt)
+            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         else:
+            llm_start = time.perf_counter()
             completion = provider.complete(payload.message, system_prompt)
+            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        
+        # Save LLM usage info
+        trace.model = completion.model
+        trace.input_tokens = completion.usage.input_tokens
+        trace.output_tokens = completion.usage.output_tokens
+        trace.total_tokens = completion.usage.total_tokens
         
     except Exception as exc:
         latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
         logger.exception("Orchestration pipeline failed", exc_info=exc)
+        
+        # Save error and latency inside trace
+        trace.errors.append(f"{exc.__class__.__name__}: {str(exc)}")
+        trace.latency_total_ms = latency_ms
+        trace_repository.save(trace)
+        
         error_event = ChatEvent(
             event=ChatEventType.ERROR,
             data={
@@ -243,7 +318,9 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
         yield _format_sse_event(done_event)
         return
 
+    # Yield tokens and accumulate them for the trace response
     for token in completion.text.split():
+        tokens_accumulated.append(token)
         token_event = ChatEvent(
             event=ChatEventType.TOKEN,
             data={
@@ -253,6 +330,20 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             },
         )
         yield _format_sse_event(token_event)
+
+    # Reconstruct answer and search for sources cited
+    answer_text = " ".join(tokens_accumulated)
+    trace.answer = answer_text
+    
+    for doc in trace.documents_retrieved:
+        filename = doc["arquivo"]
+        name_no_ext = filename.split(".")[0]
+        if filename.lower() in answer_text.lower() or name_no_ext.lower() in answer_text.lower():
+            if filename not in trace.sources_cited:
+                trace.sources_cited.append(filename)
+
+    trace.latency_total_ms = latency_ms
+    trace_repository.save(trace)
 
     done_event = ChatEvent(
         event=ChatEventType.DONE,
