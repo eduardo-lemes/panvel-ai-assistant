@@ -48,6 +48,10 @@ class BulaVectorStore:
             self._embeddings = np.load(str(emb_file))
             with open(meta_file, encoding="utf-8") as f:
                 self._metadata = json.load(f)
+            # Auto-fit MockEmbedder if present using the loaded metadata texts
+            if hasattr(self._embedder, "fit") and self._metadata:
+                texts = [meta["texto"] for meta in self._metadata]
+                self._embedder.fit(texts)
             logger.info(
                 "Vector store carregado: %d chunks de %s",
                 len(self._metadata),
