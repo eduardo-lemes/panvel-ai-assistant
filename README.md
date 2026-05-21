@@ -1,74 +1,249 @@
-# Panvel AI Assistant
+# 🟦 Panvel AI Assistant
 
-Assistente conversacional para o case tecnico de IA Generativa da Panvel.
+> Assistente virtual inteligente para o Grupo Panvel — combina RAG sobre bulas de medicamentos com Tool Calling para localização de filiais em tempo real, entregue via SSE com observabilidade estruturada.
 
-## Escopo atual
+---
 
-O projeto esta sendo construido para atender dois tipos de pergunta:
+## 📌 Visão Geral
 
-- perguntas farmacologicas com base em bulas reais via RAG;
-- perguntas sobre filiais do Parana via tool calling sobre dados estruturados.
+O **Panvel AI Assistant** é um sistema de IA conversacional construído para demonstrar a integração de técnicas modernas de LLM em um contexto farmacêutico real:
 
-Nesta etapa, apenas o backend base em FastAPI foi iniciado.
+| Capacidade | Tecnologia |
+|---|---|
+| Perguntas sobre medicamentos | **RAG** com ChromaDB + Embeddings |
+| Localização de filiais Panvel | **Tool Calling** estruturado |
+| Respostas em tempo real | **SSE** (Server-Sent Events) |
+| Auditoria de cada atendimento | **Observabilidade** com Traces |
+| Interface web responsiva | **React + Vite** |
 
-Endpoints atuais:
+---
 
-- `GET /health`
-- `POST /chat/stream`
+## 🏗️ Arquitetura
 
-## Estrutura
-
-```text
-backend/   API FastAPI e testes
-data/      insumos do case: parquet, dicionario e bulas
-frontend/  interface de chat
-docs/      notas internas e documentacao futura
-prompts/   prompts produtivos quando fizerem parte do produto
+```
+panvel-ai-assistant/
+├── backend/                   # API FastAPI (Python 3.12)
+│   ├── app/
+│   │   ├── api/               # Endpoints REST + SSE
+│   │   │   └── routes/
+│   │   │       ├── chat.py    # POST /chat/stream (SSE)
+│   │   │       ├── traces.py  # GET /chat/traces
+│   │   │       └── health.py  # GET /health
+│   │   ├── application/
+│   │   │   └── services/
+│   │   │       ├── chat.py    # Orquestrador principal do pipeline
+│   │   │       └── filial_tools.py  # Tools de busca de filiais
+│   │   ├── domain/
+│   │   │   └── models/        # Modelos Pydantic (ChatEvent, Trace, etc.)
+│   │   ├── infrastructure/
+│   │   │   ├── config/        # Settings via Pydantic + dotenv
+│   │   │   ├── llm/           # Factory de provedores LLM (Gemini / OpenAI / Mock)
+│   │   │   ├── rag/           # Retriever ChromaDB + Embeddings
+│   │   │   ├── prompts/       # Loader de prompts Jinja2
+│   │   │   └── repositories/  # Repositório de dados de filiais
+│   │   ├── observability/
+│   │   │   └── traces.py      # Modelo Trace + TraceRepository em memória
+│   │   └── main.py            # Entrypoint FastAPI + CORS
+│   └── tests/                 # Suíte Pytest
+├── frontend/                  # Interface React (Vite)
+│   └── src/
+│       ├── App.jsx            # Componente principal com SSE consumer
+│       └── index.css          # Design system dark premium
+├── data/                      # Bulas de medicamentos (PDF)
+└── .env                       # Variáveis de ambiente (não versionado)
 ```
 
-## Rodar o backend
+### Fluxo de uma Requisição
+
+```
+[Frontend React]
+      │ POST /chat/stream  (SSE)
+      ▼
+[FastAPI – chat.py]
+      │
+      ├─► _classify_intent()  →  roteamento por keyword/regex
+      │
+      ├─► [RAG]  ChromaDB.similarity_search()  →  recupera chunks de bulas
+      │          event: source { arquivo, pagina, score }
+      │
+      ├─► [TOOL] buscar_filiais() / detalhes_filial()
+      │          event: tool_call { tool_name, arguments, result }
+      │
+      ├─► [LLM]  Gemini / OpenAI / Mock  →  streaming de tokens
+      │          event: token { token }
+      │
+      ├─► [TRACE] persiste Trace com latências, tokens, fontes
+      │           event: done { trace_id, latency_ms, total_tokens }
+      │
+      └─► [Frontend] renderiza pipeline visual em tempo real
+```
+
+---
+
+## ⚙️ Como Rodar Localmente
+
+### Pré-requisitos
+
+- Python 3.12+
+- Node.js 20.x
+- [uv](https://github.com/astral-sh/uv) (recomendado) ou `pip`
+
+### 1. Clone e configure o ambiente
+
+```bash
+git clone <url-do-repositorio>
+cd panvel-ai-assistant
+
+# Copie e edite as variáveis de ambiente
+cp .env.example .env
+```
+
+### 2. Variáveis de Ambiente (`.env`)
+
+```env
+# Provedor de LLM: "gemini" | "openai" | "mock"
+LLM_PROVIDER=gemini
+
+# Modelo a utilizar
+LLM_MODEL=gemini-2.0-flash
+
+# Chave de API do provedor escolhido
+GEMINI_API_KEY=sua_chave_aqui
+# OPENAI_API_KEY=sk-...
+
+# Provedor de embeddings (herda LLM_PROVIDER por padrão)
+EMBEDDING_PROVIDER=gemini
+
+# Caminho do vector store (ChromaDB)
+VECTOR_STORE_PATH=./backend/.vector_store
+```
+
+### 3. Backend (FastAPI)
 
 ```bash
 cd backend
+
+# Criar e ativar virtual environment
 python -m venv .venv
-.venv\Scripts\activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux/macOS
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Indexar bulas no ChromaDB (necessário na primeira execução)
+python -m scripts.ingest
+
+# Iniciar servidor de desenvolvimento
+uvicorn app.main:app --reload --port 8000
 ```
 
-Health check:
+A API estará disponível em: **http://localhost:8000**  
+Documentação Swagger: **http://localhost:8000/docs**
 
-```text
-GET http://localhost:8000/health
+### 4. Frontend (React + Vite)
+
+```bash
+cd frontend
+
+npm install
+npm run dev
 ```
 
-Streaming SSE:
+A interface estará disponível em: **http://localhost:5173**
 
-```text
-POST http://localhost:8000/chat/stream
+---
+
+## 🔌 Endpoints da API
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/health` | Health check do serviço |
+| `POST` | `/chat/stream` | Chat com streaming SSE |
+| `GET` | `/chat/traces` | Lista todos os traces |
+| `GET` | `/chat/traces/{id}` | Detalha um trace específico |
+
+### Exemplo — POST /chat/stream
+
+```bash
+curl -X POST http://localhost:8000/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"conversation_id": "conv-123", "message": "Para que serve a losartana?"}'
 ```
 
-## Variaveis de ambiente
-
-Crie um arquivo `.env` na raiz do projeto para configuracao local.
-
-## LLM provider
-
-O backend suporta provider substituivel por variavel de ambiente.
-
-- `LLM_PROVIDER=mock` para desenvolvimento local sem chave
-- `LLM_PROVIDER=openai` para usar a API da OpenAI
-
-Variaveis principais:
-
-- `LLM_PROVIDER`
-- `LLM_MODEL`
-- `OPENAI_API_KEY`
-
-Exemplo minimo:
-
-```env
-LLM_PROVIDER=mock
-LLM_MODEL=gpt-4o-mini
-OPENAI_API_KEY=XxxX
+**Resposta (SSE):**
 ```
+event: trace
+data: {"step": "routing", "message": "Intenção detectada: rag"}
+
+event: source
+data: {"arquivo": "losartana.pdf", "pagina": 3, "score": 0.92}
+
+event: token
+data: {"token": "A"}
+
+event: token
+data: {"token": "losartana"}
+
+event: done
+data: {"trace_id": "abc-123", "latency_ms": 1240, "total_tokens": 312}
+```
+
+---
+
+## 🧪 Testes
+
+```bash
+cd backend
+
+# Rodar toda a suíte
+python -m pytest
+
+# Com cobertura
+python -m pytest --cov=app --cov-report=term-missing
+
+# Testes específicos de observabilidade
+python -m pytest tests/test_observability.py -v
+```
+
+---
+
+## 🔍 Decisões Técnicas
+
+### Por que RAG + Tool Calling ao mesmo tempo?
+O assistente precisa responder perguntas **farmacológicas** (informação documental → RAG) e também **localizar filiais** (dado estruturado → Tool). A classificação de intenção por regex e keywords é simples mas demonstra o padrão de roteamento sem adicionar uma chamada extra de LLM.
+
+### Por que SSE ao invés de WebSockets?
+SSE é unidirecional e mais simples para este caso de uso. A comunicação é sempre `cliente → backend (POST) → stream de volta`. Não há necessidade de canal bidirecional persistente.
+
+### Por que ChromaDB local?
+Elimina dependência de serviço externo para demonstração e entrevistas. O vector store é persistido em disco (`backend/.vector_store`) e carregado automaticamente.
+
+### Por que Traces em memória?
+Para fins de demonstração, um repositório em memória thread-safe é suficiente e evita complexidade de banco de dados. Em produção, seria substituído por um backend de observabilidade (ex: Langfuse, Phoenix, ou banco relacional).
+
+### Suporte a múltiplos LLMs via Factory Pattern
+O `LLMFactory` permite trocar o provedor (Gemini, OpenAI, Mock) via variável de ambiente sem alterar a lógica de negócio. O **Mock provider** garante que o sistema funcione para demonstração mesmo sem chaves de API.
+
+---
+
+## 🗂️ Stack Completa
+
+**Backend:**
+- `FastAPI` — framework web assíncrono
+- `ChromaDB` — vector store local para RAG
+- `google-generativeai` — SDK Gemini
+- `openai` — SDK OpenAI (opcional)
+- `Pydantic` — validação de dados e settings
+- `pytest` — testes automatizados
+
+**Frontend:**
+- `React 18` + `Vite 5` — SPA com HMR
+- `lucide-react` — ícones
+- `Plus Jakarta Sans` / `JetBrains Mono` — tipografia premium
+
+---
+
+## 👨‍💻 Autor
+
+Desenvolvido como projeto de demonstração de capacidades de IA conversacional aplicadas ao setor farmacêutico — integrando RAG, Tool Calling, streaming SSE e observabilidade estruturada em uma stack moderna Python + React.
