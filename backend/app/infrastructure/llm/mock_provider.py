@@ -8,7 +8,12 @@ class MockLLMProvider(LLMProvider):
     def __init__(self, model: str) -> None:
         self.model = model
 
-    def complete(self, message: str, system_prompt: str) -> LLMCompletionResult:
+    def complete(
+        self,
+        message: str,
+        system_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> LLMCompletionResult:
         if "=== CONTEXTO DAS BULAS ===" in system_prompt:
             # RAG mock response
             files = re.findall(r"Arquivo: ([a-zA-Z0-9__\-\.]+)", system_prompt)
@@ -54,7 +59,7 @@ class MockLLMProvider(LLMProvider):
                 text = f"Detalhes da filial obtidos com sucesso."
         else:
             # General direct conversation
-            text = f"Olá! Sou o assistente Panvel. Como posso ajudar hoje?"
+            text = f"Olá! Sou o assistente Panvel (Modo Mock). Recebi sua mensagem: '{message}'. Para ativar respostas reais do GPT/Gemini, configure uma chave de API válida no arquivo .env do projeto."
 
         input_tokens = len(message.split())
         output_tokens = len(text.split())

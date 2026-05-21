@@ -13,8 +13,11 @@ def buscar_filiais(
     repository: FilialRepository,
 ) -> BuscarFiliaisResult:
     available_cities = repository.list_available_cities()
+    
+    cidade_query = payload.cidade.strip().casefold() if payload.cidade else None
+    available_cities_casefolded = [c.strip().casefold() for c in available_cities]
 
-    if payload.cidade and payload.cidade not in available_cities:
+    if cidade_query and cidade_query not in available_cities_casefolded:
         return BuscarFiliaisResult(
             filters=payload,
             total_results=0,

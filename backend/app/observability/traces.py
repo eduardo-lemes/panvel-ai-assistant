@@ -52,6 +52,15 @@ class TraceRepository:
             # Retorna os traces mais recentes em ordem de inserção
             return list(self._traces.values())[-limit:]
 
+    def get_conversation_history(self, conversation_id: str, limit: int = 5) -> list[Trace]:
+        with self._lock:
+            # Filter completed traces for a conversation
+            completed_traces = [
+                t for t in self._traces.values()
+                if t.conversation_id == conversation_id and t.answer
+            ]
+            return completed_traces[-limit:]
+
     def clear(self) -> None:
         with self._lock:
             self._traces.clear()

@@ -55,3 +55,29 @@ def test_build_llm_provider_returns_openai_provider_when_api_key_exists() -> Non
     provider = build_llm_provider(settings)
 
     assert isinstance(provider, OpenAILLMProvider)
+
+
+def test_build_llm_provider_requires_api_key_for_gemini() -> None:
+    settings = _make_settings(
+        llm_provider="gemini",
+        llm_model="gemini-2.0-flash",
+        gemini_api_key=None,
+    )
+
+    with pytest.raises(ValueError, match="GEMINI_API_KEY is required"):
+        build_llm_provider(settings)
+
+
+def test_build_llm_provider_returns_gemini_provider_when_api_key_exists() -> None:
+    from app.infrastructure.llm.gemini_provider import GeminiLLMProvider
+
+    settings = _make_settings(
+        llm_provider="gemini",
+        llm_model="gemini-2.0-flash",
+        gemini_api_key="test-key",
+    )
+
+    provider = build_llm_provider(settings)
+
+    assert isinstance(provider, GeminiLLMProvider)
+

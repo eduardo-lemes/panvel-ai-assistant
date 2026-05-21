@@ -88,7 +88,13 @@ class FilialRepository:
 
 
 def build_default_filial_repository() -> FilialRepository:
-    data_path = Path(__file__).resolve().parents[4] / "data" / "filiais.parquet"
+    base_paths = [
+        Path(__file__).resolve().parents[4] / "data" / "filiais.parquet",  # Local Windows
+        Path(__file__).resolve().parents[3] / "data" / "filiais.parquet",  # Local dev/Docker from root or /app/
+        Path("/app/data/filiais.parquet"),                                # Docker absolute mount
+        Path("/data/filiais.parquet"),                                    # Fallback root mount
+    ]
+    data_path = next((p for p in base_paths if p.exists()), base_paths[0])
     return FilialRepository(parquet_path=data_path)
 
 

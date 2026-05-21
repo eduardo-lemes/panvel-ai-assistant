@@ -4,11 +4,14 @@ from app.application.interfaces.llm import LLMProvider
 from app.domain.models.llm import LLMCompletionResult, LLMUsage
 
 
-class OpenAILLMProvider(LLMProvider):
+class GeminiLLMProvider(LLMProvider):
     def __init__(self, api_key: str | None, model: str) -> None:
         if not api_key:
-            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai.")
-        self.client = OpenAI(api_key=api_key)
+            raise ValueError("GEMINI_API_KEY is required when LLM_PROVIDER=gemini.")
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
         self.model = model
 
     def complete(
@@ -22,17 +25,17 @@ class OpenAILLMProvider(LLMProvider):
             messages.extend(history)
         messages.append({"role": "user", "content": message})
 
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=self.model,
-            input=messages,
+            messages=messages,
         )
         usage = getattr(response, "usage", None)
         return LLMCompletionResult(
-            text=response.output_text,
+            text=response.choices[0].message.content,
             model=self.model,
             usage=LLMUsage(
-                input_tokens=getattr(usage, "input_tokens", None),
-                output_tokens=getattr(usage, "output_tokens", None),
+                input_tokens=getattr(usage, "prompt_tokens", None),
+                output_tokens=getattr(usage, "completion_tokens", None),
                 total_tokens=getattr(usage, "total_tokens", None),
             ),
         )

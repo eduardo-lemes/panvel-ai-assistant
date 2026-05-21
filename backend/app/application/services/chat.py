@@ -59,6 +59,13 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
     provider = build_llm_provider(settings)
     system_prompt = load_prompt("system-assistant.md")
 
+    # Fetch recent conversation history from trace repository
+    recent_traces = trace_repository.get_conversation_history(payload.conversation_id, limit=3)
+    history = []
+    for t in recent_traces:
+        history.append({"role": "user", "content": t.prompt})
+        history.append({"role": "assistant", "content": t.answer})
+
     # Trace: starting orchestration
     trace_event = ChatEvent(
         event=ChatEventType.TRACE,
@@ -153,7 +160,7 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{rag_rules}\n\n=== CONTEXTO DAS BULAS ===\n{context_text}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt)
+            completion = provider.complete(payload.message, full_system_prompt, history=history)
             trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         elif intent == "detalhes_filial":
@@ -201,7 +208,7 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL detalhes_filial ===\n{tool_result.model_dump_json(indent=2)}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt)
+            completion = provider.complete(payload.message, full_system_prompt, history=history)
             trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         elif intent == "buscar_filiais":
@@ -264,12 +271,12 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL buscar_filiais ===\n{tool_result.model_dump_json(indent=2)}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt)
+            completion = provider.complete(payload.message, full_system_prompt, history=history)
             trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         else:
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, system_prompt)
+            completion = provider.complete(payload.message, system_prompt, history=history)
             trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
             
         latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -371,6 +378,6 @@ def _stringify_optional_int(value: int | None) -> str:
 
 def _build_error_message(exc: Exception) -> str:
     message = str(exc).strip()
-    if "insufficient_quota" in message.lower():
-        return "O provider LLM retornou falta de quota. Verifique billing, limites ou troque para LLM_PROVIDER=mock."
+    if "insufficient_quota" in message.lower() or "quota" in message.lower() or "limit" in message.lower():
+        return f"Limite de quota excedido no provedor LLM. Verifique o faturamento (billing) e limites da sua chave de API. Detalhes: {message}"
     return message or "Falha ao chamar o provider LLM."

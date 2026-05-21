@@ -51,8 +51,8 @@ def test_chat_stream_emits_trace_token_and_done_events(monkeypatch: pytest.Monke
 
 def test_chat_stream_emits_error_event_when_provider_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     class FailingProvider(LLMProvider):
-        def complete(self, message: str, system_prompt: str) -> LLMCompletionResult:
-            del message, system_prompt
+        def complete(self, message: str, system_prompt: str, history=None) -> LLMCompletionResult:
+            del message, system_prompt, history
             raise RuntimeError("forced provider failure")
 
     monkeypatch.setattr(

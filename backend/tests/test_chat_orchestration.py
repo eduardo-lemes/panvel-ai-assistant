@@ -138,3 +138,54 @@ def test_chat_orchestration_direct_flow(mock_settings: Settings) -> None:
     # Tokens and done
     assert "event: token" in body
     assert "event: done" in body
+
+
+def test_chat_orchestration_history_flow(mock_settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = TestClient(app)
+    
+    captured_histories = []
+    
+    from app.infrastructure.llm.mock_provider import MockLLMProvider
+    original_complete = MockLLMProvider.complete
+    
+    def mock_complete(self, message: str, system_prompt: str, history=None):
+        captured_histories.append(history)
+        return original_complete(self, message, system_prompt, history)
+        
+    monkeypatch.setattr(MockLLMProvider, "complete", mock_complete)
+    
+    # Send first message
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={
+            "conversation_id": "conv-history-test",
+            "message": "Mensagem 1",
+        },
+    ) as r1:
+        b1 = b"".join(r1.iter_bytes()).decode()
+        
+    assert r1.status_code == 200
+    
+    # Send second message
+    with client.stream(
+        "POST",
+        "/chat/stream",
+        json={
+            "conversation_id": "conv-history-test",
+            "message": "Mensagem 2",
+        },
+    ) as r2:
+        b2 = b"".join(r2.iter_bytes()).decode()
+        
+    assert r2.status_code == 200
+    
+    # Verify that the second call received the history
+    assert len(captured_histories) >= 2
+    assert captured_histories[0] == []  # First call has no history
+    
+    history_in_second_call = captured_histories[1]
+    assert len(history_in_second_call) == 2
+    assert history_in_second_call[0] == {"role": "user", "content": "Mensagem 1"}
+    assert "Modo Mock" in history_in_second_call[1]["content"]
+

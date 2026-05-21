@@ -54,13 +54,18 @@ def build_retriever(
     embedding_provider: str,
     openai_api_key: str | None,
     vector_store_path: str,
+    gemini_api_key: str | None = None,
 ) -> BulaRetriever:
     """
     Constrói e cacheia o BulaRetriever para o processo atual.
 
     Parâmetros primitivos para compatibilidade com lru_cache.
     """
-    embedder: Embedder = build_embedder(embedding_provider, openai_api_key)
+    embedder: Embedder = build_embedder(
+        embedding_provider,
+        openai_api_key,
+        gemini_api_key,
+    )
     store = BulaVectorStore(
         store_path=Path(vector_store_path),
         embedder=embedder,
@@ -84,4 +89,5 @@ def get_retriever() -> BulaRetriever:
         embedding_provider=s.embedding_provider,
         openai_api_key=s.openai_api_key,
         vector_store_path=str(s.vector_store_path),
+        gemini_api_key=s.gemini_api_key,
     )

@@ -80,13 +80,81 @@ panvel-ai-assistant/
 
 ---
 
-## ⚙️ Como Rodar Localmente
+## 🐳 Rodar com Docker (recomendado)
+
+### Pré-requisitos
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e rodando
+
+### 1. Configure o `.env`
+```bash
+cp .env.example .env
+# Edite o .env com sua chave de API
+```
+
+### 2. Suba tudo com um único comando
+```bash
+docker compose up --build
+```
+
+| Serviço | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| Docs Swagger | http://localhost:8000/docs |
+
+> **Nota:** Na primeira execução, o backend detecta automaticamente que o vector store não existe e roda a ingestão das bulas. Isso pode levar alguns minutos dependendo da sua chave de API.
+
+---
+
+## ☁️ Deploy no Railway (produção)
+
+### Passo 1 — Criar conta e projeto
+1. Acesse [railway.app](https://railway.app) e faça login com GitHub
+2. Clique em **New Project → Deploy from GitHub repo**
+3. Selecione este repositório
+
+### Passo 2 — Criar o serviço de Backend
+1. No projeto, clique em **New Service → GitHub Repo**
+2. Selecione o repo e configure:
+   - **Root Directory:** `backend`
+   - **Build:** Railway detecta o `Dockerfile` automaticamente
+3. Em **Variables**, adicione todas as variáveis do seu `.env`:
+   ```
+   LLM_PROVIDER=gemini
+   LLM_MODEL=gemini-2.0-flash
+   GEMINI_API_KEY=sua_chave_aqui
+   EMBEDDING_PROVIDER=gemini
+   ```
+4. Em **Settings → Networking**, clique em **Generate Domain** e copie a URL gerada (ex: `https://panvel-backend.up.railway.app`)
+
+### Passo 3 — Criar o serviço de Frontend
+1. No mesmo projeto, clique em **New Service → GitHub Repo**
+2. Configure:
+   - **Root Directory:** `frontend`
+   - **Build:** Railway detecta o `Dockerfile` automaticamente
+3. Em **Variables**, adicione:
+   ```
+   VITE_API_BASE_URL=https://panvel-backend.up.railway.app
+   ```
+   *(Use a URL do backend gerada no Passo 2)*
+4. Em **Settings → Networking**, clique em **Generate Domain**
+
+### Passo 4 — Atualizar CORS do backend
+Após ter a URL do frontend, adicione-a nas variáveis do serviço de backend:
+```
+FRONTEND_URL=https://panvel-frontend.up.railway.app
+```
+
+Pronto! 🚀 Ambos os serviços fazem deploy automático a cada `git push` na branch `main`.
+
+---
+
+## ⚙️ Como Rodar Localmente (sem Docker)
 
 ### Pré-requisitos
 
 - Python 3.12+
 - Node.js 20.x
-- [uv](https://github.com/astral-sh/uv) (recomendado) ou `pip`
 
 ### 1. Clone e configure o ambiente
 

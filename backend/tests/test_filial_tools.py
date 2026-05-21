@@ -42,6 +42,18 @@ def test_busca_filiais_returns_actionable_error_for_unknown_city(tmp_path: Path)
     assert "cidade valida" in (result.error.suggestion or "")
 
 
+def test_busca_filiais_is_case_insensitive(tmp_path: Path) -> None:
+    repository = FilialRepository(_create_parquet_fixture(tmp_path))
+
+    # Test lowercase input against mixed-case repository data
+    result = buscar_filiais(
+        BuscarFiliaisInput(cidade="curitiba"),
+        repository,
+    )
+    assert result.error is None
+    assert result.total_results == 2
+
+
 def test_busca_filiais_returns_actionable_error_for_empty_results(tmp_path: Path) -> None:
     repository = FilialRepository(_create_parquet_fixture(tmp_path))
 

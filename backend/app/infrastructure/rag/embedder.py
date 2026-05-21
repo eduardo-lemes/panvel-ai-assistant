@@ -82,10 +82,38 @@ class MockEmbedder(Embedder):
 
 
 # ---------------------------------------------------------------------------
+# Gemini Embedder
+# ---------------------------------------------------------------------------
+
+class GeminiEmbedder(Embedder):
+    MODEL = "gemini-embedding-2"
+
+    def __init__(self, api_key: str) -> None:
+        from openai import OpenAI
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY é obrigatório para embedding_provider=gemini.")
+        self._client = OpenAI(
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+        )
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        response = self._client.embeddings.create(
+            model=self.MODEL,
+            input=texts,
+        )
+        return [item.embedding for item in response.data]
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
-def build_embedder(embedding_provider: str, openai_api_key: str | None) -> Embedder:
+def build_embedder(
+    embedding_provider: str,
+    openai_api_key: str | None,
+    gemini_api_key: str | None = None,
+) -> Embedder:
     if embedding_provider == "openai":
         if not openai_api_key:
             raise ValueError(
@@ -94,5 +122,16 @@ def build_embedder(embedding_provider: str, openai_api_key: str | None) -> Embed
         logger.info("Usando OpenAIEmbedder (text-embedding-3-small).")
         return OpenAIEmbedder(api_key=openai_api_key)
 
-    logger.info("Usando MockEmbedder (TF-IDF local). Para embeddings reais, defina EMBEDDING_PROVIDER=openai.")
-    return MockEmbedder()
+    if embedding_provider == "gemini":
+        if not gemini_api_key:
+            raise ValueError(
+                "GEMINI_API_KEY é necessário quando EMBEDDING_PROVIDER=gemini."
+            )
+        logger.info("Usando GeminiEmbedder (gemini-embedding-2).")
+        return GeminiEmbedder(api_key=gemini_api_key)
+
+    if embedding_provider == "mock":
+        logger.info("Usando MockEmbedder (TF-IDF local). Para embeddings reais, defina EMBEDDING_PROVIDER=openai ou gemini.")
+        return MockEmbedder()
+
+    raise ValueError(f"Unsupported embedding provider: {embedding_provider}")

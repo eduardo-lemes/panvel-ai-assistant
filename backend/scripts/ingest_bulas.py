@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.infrastructure.config.settings import get_settings
 from app.infrastructure.rag.chunker import extract_chunks_from_directory
-from app.infrastructure.rag.embedder import MockEmbedder, build_embedder
+from app.infrastructure.rag.embedder import build_embedder
 from app.infrastructure.rag.vector_store import BulaVectorStore
 
 logging.basicConfig(
@@ -85,12 +85,11 @@ def main() -> None:
         logger.info("  %-60s %d chunks", fname, count)
 
     # 2. Embedder
-    embedder = build_embedder(settings.embedding_provider, settings.openai_api_key)
-
-    # Para MockEmbedder, pre-treina o vocabulário com todos os textos
-    if isinstance(embedder, MockEmbedder):
-        logger.info("Treinando vocabulário TF-IDF com todos os chunks...")
-        embedder.fit([c.texto for c in chunks])
+    embedder = build_embedder(
+        settings.embedding_provider,
+        settings.openai_api_key,
+        settings.gemini_api_key,
+    )
 
     # 3. Vector store — limpa antes de reinserir (idempotente)
     store = BulaVectorStore(store_path=settings.vector_store_path, embedder=embedder)

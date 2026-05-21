@@ -23,6 +23,7 @@ class Settings:
     openai_api_key: str | None
     embedding_provider: str
     vector_store_path: Path
+    gemini_api_key: str | None = None
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -33,7 +34,7 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 @lru_cache
 def get_settings() -> Settings:
-    llm_provider = os.getenv("LLM_PROVIDER", "mock")
+    llm_provider = os.getenv("LLM_PROVIDER", "gemini")
     return Settings(
         app_name=os.getenv("APP_NAME", "Panvel AI Assistant API"),
         app_version=os.getenv("APP_VERSION", "0.1.0"),
@@ -43,6 +44,7 @@ def get_settings() -> Settings:
         llm_provider=llm_provider,
         llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
+        gemini_api_key=os.getenv("GEMINI_API_KEY"),
         embedding_provider=os.getenv("EMBEDDING_PROVIDER", llm_provider),
         vector_store_path=Path(os.getenv("VECTOR_STORE_PATH", str(_ROOT / "backend" / ".vector_store"))),
     )
