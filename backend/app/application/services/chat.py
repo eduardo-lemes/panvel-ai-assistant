@@ -94,6 +94,7 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
     tokens_accumulated = []
 
     try:
+        prompt_sent = system_prompt
         # 1. Routing
         routing_start = time.perf_counter()
         intent = _classify_intent(payload.message)
@@ -160,8 +161,8 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{rag_rules}\n\n=== CONTEXTO DAS BULAS ===\n{context_text}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt, history=history)
-            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
+            stream_generator = provider.stream(payload.message, full_system_prompt, history=history)
+            prompt_sent = full_system_prompt
             
         elif intent == "detalhes_filial":
             tool_start = time.perf_counter()
@@ -208,8 +209,8 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL detalhes_filial ===\n{tool_result.model_dump_json(indent=2)}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt, history=history)
-            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
+            stream_generator = provider.stream(payload.message, full_system_prompt, history=history)
+            prompt_sent = full_system_prompt
             
         elif intent == "buscar_filiais":
             tool_start = time.perf_counter()
@@ -271,21 +272,22 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             full_system_prompt = f"{system_prompt}\n\n{tool_rules}\n\n=== RETORNO DA TOOL buscar_filiais ===\n{tool_result.model_dump_json(indent=2)}"
             
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, full_system_prompt, history=history)
-            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
+            stream_generator = provider.stream(payload.message, full_system_prompt, history=history)
+            prompt_sent = full_system_prompt
             
         else:
             llm_start = time.perf_counter()
-            completion = provider.complete(payload.message, system_prompt, history=history)
-            trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
+            stream_generator = provider.stream(payload.message, system_prompt, history=history)
+            prompt_sent = system_prompt
             
         latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
         
-        # Save LLM usage info
-        trace.model = completion.model
-        trace.input_tokens = completion.usage.input_tokens
-        trace.output_tokens = completion.usage.output_tokens
-        trace.total_tokens = completion.usage.total_tokens
+        # Save LLM usage info (will finalize outputs after streaming)
+        trace.model = settings.llm_model
+        prompt_words = len(prompt_sent.split()) + len(payload.message.split())
+        trace.input_tokens = int(prompt_words * 1.3)
+        trace.output_tokens = 0
+        trace.total_tokens = trace.input_tokens
         
     except Exception as exc:
         latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -326,18 +328,36 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
         return
 
     # Yield tokens and accumulate them for the trace response
-    tokens = [t for t in re.split(r"(\s+)", completion.text) if t]
-    for token in tokens:
-        tokens_accumulated.append(token)
-        token_event = ChatEvent(
-            event=ChatEventType.TOKEN,
+    # We measure true LLM latency (Time to First Token) on the first token received
+    try:
+        for token in stream_generator:
+            if not tokens_accumulated:
+                trace.latencies["llm"] = round((time.perf_counter() - llm_start) * 1000, 2)
+            tokens_accumulated.append(token)
+            token_event = ChatEvent(
+                event=ChatEventType.TOKEN,
+                data={
+                    "trace_id": trace_id,
+                    "conversation_id": payload.conversation_id,
+                    "token": token,
+                },
+            )
+            yield _format_sse_event(token_event)
+    except Exception as exc:
+        logger.exception("Error during LLM streaming", exc_info=exc)
+        trace.errors.append(f"StreamingError: {str(exc)}")
+        error_event = ChatEvent(
+            event=ChatEventType.ERROR,
             data={
                 "trace_id": trace_id,
                 "conversation_id": payload.conversation_id,
-                "token": token,
+                "provider": settings.llm_provider,
+                "model": settings.llm_model,
+                "error_code": exc.__class__.__name__,
+                "message": _build_error_message(exc),
             },
         )
-        yield _format_sse_event(token_event)
+        yield _format_sse_event(error_event)
 
     # Reconstruct answer and search for sources cited
     answer_text = "".join(tokens_accumulated)
@@ -350,6 +370,10 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             if filename not in trace.sources_cited:
                 trace.sources_cited.append(filename)
 
+    trace.output_tokens = len(tokens_accumulated)
+    trace.total_tokens = trace.input_tokens + trace.output_tokens
+    
+    latency_ms = round((time.perf_counter() - started_at) * 1000, 2)
     trace.latency_total_ms = latency_ms
     trace_repository.save(trace)
 
@@ -359,11 +383,11 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             "trace_id": trace_id,
             "conversation_id": payload.conversation_id,
             "provider": settings.llm_provider,
-            "model": completion.model,
+            "model": trace.model,
             "latency_ms": f"{latency_ms}",
-            "input_tokens": _stringify_optional_int(completion.usage.input_tokens),
-            "output_tokens": _stringify_optional_int(completion.usage.output_tokens),
-            "total_tokens": _stringify_optional_int(completion.usage.total_tokens),
+            "input_tokens": _stringify_optional_int(trace.input_tokens),
+            "output_tokens": _stringify_optional_int(trace.output_tokens),
+            "total_tokens": _stringify_optional_int(trace.total_tokens),
         },
     )
     yield _format_sse_event(done_event)

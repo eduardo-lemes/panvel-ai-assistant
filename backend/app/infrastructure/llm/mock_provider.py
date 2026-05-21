@@ -1,5 +1,6 @@
 import re
 import json
+from collections.abc import Iterator
 from app.application.interfaces.llm import LLMProvider
 from app.domain.models.llm import LLMCompletionResult, LLMUsage
 
@@ -72,3 +73,16 @@ class MockLLMProvider(LLMProvider):
                 total_tokens=input_tokens + output_tokens,
             ),
         )
+
+    def stream(
+        self,
+        message: str,
+        system_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[str]:
+        import time
+        result = self.complete(message, system_prompt, history=history)
+        tokens = [t for t in re.split(r"(\s+)", result.text) if t]
+        for token in tokens:
+            time.sleep(0.01)
+            yield token

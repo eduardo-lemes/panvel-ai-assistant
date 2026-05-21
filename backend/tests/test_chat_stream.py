@@ -55,6 +55,11 @@ def test_chat_stream_emits_error_event_when_provider_fails(monkeypatch: pytest.M
             del message, system_prompt, history
             raise RuntimeError("forced provider failure")
 
+        def stream(self, message: str, system_prompt: str, history=None):
+            del message, system_prompt, history
+            raise RuntimeError("forced provider failure")
+
+
     monkeypatch.setattr(
         "app.application.services.chat.build_llm_provider",
         lambda settings: FailingProvider(),

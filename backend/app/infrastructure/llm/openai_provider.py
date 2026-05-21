@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from openai import OpenAI
 
 from app.application.interfaces.llm import LLMProvider
@@ -36,3 +37,26 @@ class OpenAILLMProvider(LLMProvider):
                 total_tokens=getattr(usage, "total_tokens", None),
             ),
         )
+
+    def stream(
+        self,
+        message: str,
+        system_prompt: str,
+        history: list[dict[str, str]] | None = None,
+    ) -> Iterator[str]:
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": message})
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            stream=True,
+        )
+        for chunk in response:
+            if chunk.choices and len(chunk.choices) > 0:
+                delta = chunk.choices[0].delta
+                content = getattr(delta, "content", None)
+                if content:
+                    yield content
