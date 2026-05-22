@@ -29,3 +29,15 @@ app.add_middleware(
 )
 
 app.include_router(api_router)
+
+
+@app.get("/")
+async def root():
+    return {
+        "name": settings.app_name,
+        "version": settings.app_version,
+        "status": "online",
+        "docs_url": "/docs",
+        "health_url": "/health"
+    }
+
