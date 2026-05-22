@@ -53,6 +53,27 @@ def _classify_intent(message: str) -> str:
     return "direct"
 
 
+def _is_bula_meta_query(message: str) -> bool:
+    msg = message.lower()
+    meta_patterns = [
+        r"quais\s+(são\s+as\s+)?bulas",
+        r"quais\s+(são\s+os\s+)?medicamentos",
+        r"quais\s+(são\s+os\s+)?remédios",
+        r"quais\s+(são\s+os\s+)?remedios",
+        r"quais\s+(medicamentos|remédios|remedios|bulas)\s+(você|vc)\s+(tem|conhece|possui|acesso)",
+        r"lista\s+de\s+(bulas|medicamentos|remédios|remedios)",
+        r"quantas\s+bulas",
+        r"quantos\s+(medicamentos|remédios|remedios)",
+        r"(só|so)\s+tem\s+(isso|essas|esses)\s+de\s+(bula|medicamento|remédio|remedio)",
+        r"(só|so)\s+tem\s+essas\s+bulas",
+        r"quais\s+(estão|estao)\s+disponíveis",
+        r"quais\s+(estão|estao)\s+cadastrados",
+        r"tem\s+(outro|outra|outros|outras)\s+(bula|medicamento|remédio|remedio)",
+    ]
+    return any(re.search(pat, msg) for pat in meta_patterns)
+
+
+
 def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
     trace_id = str(uuid4())
     settings = get_settings()
@@ -113,49 +134,65 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
         # 2. Flow execution
         if intent == "rag":
             retrieval_start = time.perf_counter()
-            yield _format_sse_event(ChatEvent(
-                event=ChatEventType.TRACE,
-                data={
-                    "trace_id": trace_id,
-                    "conversation_id": payload.conversation_id,
-                    "step": "retrieval",
-                    "message": "Buscando informações nas bulas...",
-                }
-            ))
-            
             retriever = get_retriever()
-            chunks = retriever.retrieve(payload.message, k=3)
-            trace.latencies["retrieval"] = round((time.perf_counter() - retrieval_start) * 1000, 2)
             
-            if not chunks:
-                trace.fallback = True
-            
-            # Emit source events and save metadata to trace
-            for chunk in chunks:
-                doc_meta = {
-                    "arquivo": chunk.arquivo,
-                    "pagina": chunk.pagina,
-                    "secao": chunk.secao,
-                    "score": chunk.score,
-                }
-                trace.documents_retrieved.append(doc_meta)
-                
+            if _is_bula_meta_query(payload.message):
                 yield _format_sse_event(ChatEvent(
-                    event=ChatEventType.SOURCE,
+                    event=ChatEventType.TRACE,
                     data={
                         "trace_id": trace_id,
                         "conversation_id": payload.conversation_id,
-                        **doc_meta,
-                        "texto": chunk.texto,
+                        "step": "retrieval",
+                        "message": "Listando todos os medicamentos disponíveis no sistema...",
                     }
                 ))
-            
-            context_parts = []
-            for i, chunk in enumerate(chunks):
-                context_parts.append(
-                    f"Trecho {i+1} (Arquivo: {chunk.arquivo}, Página: {chunk.pagina}, Seção: {chunk.secao}):\n{chunk.texto}"
-                )
-            context_text = "\n\n".join(context_parts)
+                all_bulas = retriever.list_files
+                trace.latencies["retrieval"] = round((time.perf_counter() - retrieval_start) * 1000, 2)
+                
+                bula_list_str = "\n".join(f"- {b}" for b in all_bulas)
+                context_text = f"O sistema possui as seguintes bulas de medicamentos cadastradas e indexadas disponíveis para consulta:\n{bula_list_str}"
+            else:
+                yield _format_sse_event(ChatEvent(
+                    event=ChatEventType.TRACE,
+                    data={
+                        "trace_id": trace_id,
+                        "conversation_id": payload.conversation_id,
+                        "step": "retrieval",
+                        "message": "Buscando informações nas bulas...",
+                    }
+                ))
+                chunks = retriever.retrieve(payload.message, k=3)
+                trace.latencies["retrieval"] = round((time.perf_counter() - retrieval_start) * 1000, 2)
+                
+                if not chunks:
+                    trace.fallback = True
+                
+                # Emit source events and save metadata to trace
+                for chunk in chunks:
+                    doc_meta = {
+                        "arquivo": chunk.arquivo,
+                        "pagina": chunk.pagina,
+                        "secao": chunk.secao,
+                        "score": chunk.score,
+                    }
+                    trace.documents_retrieved.append(doc_meta)
+                    
+                    yield _format_sse_event(ChatEvent(
+                        event=ChatEventType.SOURCE,
+                        data={
+                            "trace_id": trace_id,
+                            "conversation_id": payload.conversation_id,
+                            **doc_meta,
+                            "texto": chunk.texto,
+                        }
+                    ))
+                
+                context_parts = []
+                for i, chunk in enumerate(chunks):
+                    context_parts.append(
+                        f"Trecho {i+1} (Arquivo: {chunk.arquivo}, Página: {chunk.pagina}, Seção: {chunk.secao}):\n{chunk.texto}"
+                    )
+                context_text = "\n\n".join(context_parts)
             
             rag_rules = load_prompt("rag-answering.md")
             full_system_prompt = f"{system_prompt}\n\n{rag_rules}\n\n=== CONTEXTO DAS BULAS ===\n{context_text}"
@@ -163,6 +200,7 @@ def stream_chat_events(payload: ChatRequest) -> Iterator[str]:
             llm_start = time.perf_counter()
             stream_generator = provider.stream(payload.message, full_system_prompt, history=history)
             prompt_sent = full_system_prompt
+
             
         elif intent == "detalhes_filial":
             tool_start = time.perf_counter()

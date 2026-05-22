@@ -162,3 +162,9 @@ class BulaVectorStore:
     @property
     def count(self) -> int:
         return len(self._metadata)
+
+    @property
+    def list_files(self) -> list[str]:
+        """Retorna os nomes únicos dos arquivos de bula indexados."""
+        return sorted(list(set(meta["arquivo"] for meta in self._metadata)))
+

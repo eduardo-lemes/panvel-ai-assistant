@@ -44,6 +44,12 @@ class BulaRetriever:
         """True se o índice tem ao menos um chunk indexado."""
         return self._store.count > 0
 
+    @property
+    def list_files(self) -> list[str]:
+        """Retorna uma lista ordenada com os nomes de arquivos únicos indexados."""
+        return self._store.list_files
+
+
 
 # ---------------------------------------------------------------------------
 # Factory singleton — carregado uma vez por processo

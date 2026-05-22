@@ -82,3 +82,21 @@ def test_chat_stream_emits_error_event_when_provider_fails(monkeypatch: pytest.M
     assert "event: error" in body
     assert "event: done" in body
     assert '"error_code": "RuntimeError"' in body
+
+
+def test_is_bula_meta_query() -> None:
+    from app.application.services.chat import _is_bula_meta_query
+
+    # Valid meta queries
+    assert _is_bula_meta_query("quais bulas você tem?")
+    assert _is_bula_meta_query("tu só tem isso de bula?")
+    assert _is_bula_meta_query("so tem essas bulas?")
+    assert _is_bula_meta_query("quais medicamentos estão disponíveis?")
+    assert _is_bula_meta_query("quais são os remédios cadastrados?")
+    assert _is_bula_meta_query("quantas bulas tem no sistema?")
+
+    # Non-meta queries (actual medical questions)
+    assert not _is_bula_meta_query("Para que serve a losartana?")
+    assert not _is_bula_meta_query("Qual a dosagem da ritalina?")
+    assert not _is_bula_meta_query("Quais os efeitos colaterais do dicoxibe?")
+
