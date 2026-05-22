@@ -94,6 +94,9 @@ def test_is_bula_meta_query() -> None:
     assert _is_bula_meta_query("quais medicamentos estão disponíveis?")
     assert _is_bula_meta_query("quais são os remédios cadastrados?")
     assert _is_bula_meta_query("quantas bulas tem no sistema?")
+    assert _is_bula_meta_query("me lista todas as bulas")
+    assert _is_bula_meta_query("lista as bulas")
+    assert _is_bula_meta_query("listar todos os medicamentos")
 
     # Non-meta queries (actual medical questions)
     assert not _is_bula_meta_query("Para que serve a losartana?")

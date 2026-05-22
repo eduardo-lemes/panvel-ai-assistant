@@ -55,15 +55,20 @@ def _classify_intent(message: str) -> str:
 
 def _is_bula_meta_query(message: str) -> bool:
     msg = message.lower()
+    
+    # Matches listing requests: "me lista todas as bulas", "listar medicamentos", "lista de remédios", etc.
+    if re.search(r"\blistar?\b.*\b(bula|medicamento|remédio|remedio)s?\b", msg):
+        return True
+        
+    # Matches inquiries about what is available: "quais bulas", "quais são os remédios", etc.
+    if re.search(r"\bquais\b.*\b(bula|medicamento|remédio|remedio)s?\b", msg):
+        return True
+        
+    # Matches quantity inquiries: "quantas bulas", "quantos remédios tem", etc.
+    if re.search(r"\b(quantos?|quantas)\b.*\b(bula|medicamento|remédio|remedio)s?\b", msg):
+        return True
+
     meta_patterns = [
-        r"quais\s+(são\s+as\s+)?bulas",
-        r"quais\s+(são\s+os\s+)?medicamentos",
-        r"quais\s+(são\s+os\s+)?remédios",
-        r"quais\s+(são\s+os\s+)?remedios",
-        r"quais\s+(medicamentos|remédios|remedios|bulas)\s+(você|vc)\s+(tem|conhece|possui|acesso)",
-        r"lista\s+de\s+(bulas|medicamentos|remédios|remedios)",
-        r"quantas\s+bulas",
-        r"quantos\s+(medicamentos|remédios|remedios)",
         r"(só|so)\s+tem\s+(isso|essas|esses)\s+de\s+(bula|medicamento|remédio|remedio)",
         r"(só|so)\s+tem\s+essas\s+bulas",
         r"quais\s+(estão|estao)\s+disponíveis",
