@@ -51,7 +51,8 @@ class FilialRepository:
         atendimento_24_horas: bool | None = None,
         tipo_estabelecimento: str | None = None,
         limite: int = 10,
-    ) -> list[Filial]:
+        offset: int = 0,
+    ) -> tuple[list[Filial], int]:
         dataframe = self._load_dataframe().copy()
 
         if cidade:
@@ -83,8 +84,9 @@ class FilialRepository:
             atendimento_24_horas,
         )
 
-        records = dataframe.head(limite).to_dict(orient="records")
-        return [_row_to_filial(record) for record in records]
+        total_results = len(dataframe)
+        records = dataframe.iloc[offset : offset + limite].to_dict(orient="records")
+        return [_row_to_filial(record) for record in records], total_results
 
 
 def build_default_filial_repository() -> FilialRepository:

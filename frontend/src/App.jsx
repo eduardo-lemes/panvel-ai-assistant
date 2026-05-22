@@ -262,9 +262,9 @@ function App() {
             src="/logo-panvel.png" 
             alt="Grupo Panvel" 
             style={{ 
-              height: '28px', 
-              objectFit: 'contain', 
-              filter: 'brightness(0) invert(1) contrast(1.2)' 
+              height: '36px', 
+              borderRadius: '6px',
+              objectFit: 'contain'
             }} 
           />
           <div className="status-indicator">

@@ -11,6 +11,7 @@ class BuscarFiliaisInput(BaseModel):
     atendimento_24_horas: bool | None = None
     tipo_estabelecimento: str | None = None
     limite: int = Field(default=10, ge=1, le=50)
+    offset: int = Field(default=0, ge=0)
 
     @field_validator("cidade", "tipo_estabelecimento")
     @classmethod

@@ -29,7 +29,7 @@ def buscar_filiais(
             ),
         )
 
-    filiais = repository.search(
+    filiais, total_results = repository.search(
         cidade=payload.cidade,
         delivery=payload.delivery,
         panvel_clinic=payload.panvel_clinic,
@@ -37,9 +37,10 @@ def buscar_filiais(
         atendimento_24_horas=payload.atendimento_24_horas,
         tipo_estabelecimento=payload.tipo_estabelecimento,
         limite=payload.limite,
+        offset=payload.offset,
     )
 
-    if not filiais:
+    if total_results == 0:
         return BuscarFiliaisResult(
             filters=payload,
             total_results=0,
@@ -53,7 +54,7 @@ def buscar_filiais(
 
     return BuscarFiliaisResult(
         filters=payload,
-        total_results=len(filiais),
+        total_results=total_results,
         filiais=filiais,
     )
 

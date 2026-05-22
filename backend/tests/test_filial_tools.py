@@ -98,6 +98,39 @@ def test_detalhes_filial_returns_filial_when_code_exists(tmp_path: Path) -> None
     assert result.filial.localidade == "Londrina"
 
 
+def test_buscar_filiais_with_offset_pagination(tmp_path: Path) -> None:
+    repository = FilialRepository(_create_parquet_fixture(tmp_path))
+
+    # Page 1: limit 1, offset 0
+    result_p1 = buscar_filiais(
+        BuscarFiliaisInput(cidade="Curitiba", limite=1, offset=0),
+        repository,
+    )
+    assert result_p1.error is None
+    assert result_p1.total_results == 2
+    assert len(result_p1.filiais) == 1
+    assert result_p1.filiais[0].codigo_filial == "101"
+
+    # Page 2: limit 1, offset 1
+    result_p2 = buscar_filiais(
+        BuscarFiliaisInput(cidade="Curitiba", limite=1, offset=1),
+        repository,
+    )
+    assert result_p2.error is None
+    assert result_p2.total_results == 2
+    assert len(result_p2.filiais) == 1
+    assert result_p2.filiais[0].codigo_filial == "103"
+
+    # Page 3: limit 1, offset 2 (empty, but total_results is 2, no error because results exist in other pages)
+    result_p3 = buscar_filiais(
+        BuscarFiliaisInput(cidade="Curitiba", limite=1, offset=2),
+        repository,
+    )
+    assert result_p3.error is None
+    assert result_p3.total_results == 2
+    assert len(result_p3.filiais) == 0
+
+
 def _create_parquet_fixture(tmp_path: Path) -> Path:
     dataframe = pd.DataFrame(
         [

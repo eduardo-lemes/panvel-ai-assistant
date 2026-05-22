@@ -46,6 +46,39 @@ def test_get_by_code_returns_none_for_missing_filial(tmp_path: Path) -> None:
     assert filial is None
 
 
+def test_search_returns_tuple_with_results_and_total_count(tmp_path: Path) -> None:
+    repository = FilialRepository(_create_parquet_fixture(tmp_path))
+
+    filiais, total = repository.search(cidade="Curitiba")
+
+    assert total == 2
+    assert len(filiais) == 2
+    assert filiais[0].localidade == "Curitiba"
+    assert filiais[1].localidade == "Curitiba"
+
+
+def test_search_supports_offset_pagination(tmp_path: Path) -> None:
+    repository = FilialRepository(_create_parquet_fixture(tmp_path))
+
+    # Curitiba has 2 filiais: 101 and 103.
+    # Page 1 (limite 1, offset 0)
+    filiais_p1, total_p1 = repository.search(cidade="Curitiba", limite=1, offset=0)
+    assert total_p1 == 2
+    assert len(filiais_p1) == 1
+    assert filiais_p1[0].codigo_filial == "101"
+
+    # Page 2 (limite 1, offset 1)
+    filiais_p2, total_p2 = repository.search(cidade="Curitiba", limite=1, offset=1)
+    assert total_p2 == 2
+    assert len(filiais_p2) == 1
+    assert filiais_p2[0].codigo_filial == "103"
+
+    # Page 3 (limite 1, offset 2)
+    filiais_p3, total_p3 = repository.search(cidade="Curitiba", limite=1, offset=2)
+    assert total_p3 == 2
+    assert len(filiais_p3) == 0
+
+
 def _create_parquet_fixture(tmp_path: Path) -> Path:
     dataframe = pd.DataFrame(
         [
